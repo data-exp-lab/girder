@@ -51,8 +51,8 @@ class InstallWithOptions(install):
         shutil.copy('package.json', dest)
         self.mergeDir(os.path.join('clients', 'web', 'src'), dest)
         self.mergeDir(os.path.join('clients', 'web', 'static'), dest)
-        shutil.copy(os.path.join('clients', 'web', 'fontello.config.json'),
-                    os.path.join(dest, 'clients', 'web'))
+        shutil.copy(os.path.join('clients', 'web', 'src', 'assets', 'fontello.config.json'),
+                    os.path.join(dest, 'clients', 'web', 'src', 'assets'))
         self.mergeDir('grunt_tasks', dest)
         self.mergeDir('plugins', dest)
 
@@ -80,7 +80,7 @@ extras_reqs = {
     'worker': ['celery'],
     'oauth': ['pyjwt', 'cryptography']
 }
-all_extra_reqs = itertools.chain.from_iterable(extras_reqs.values()) 
+all_extra_reqs = itertools.chain.from_iterable(extras_reqs.values())
 extras_reqs['plugins'] = list(set(all_extra_reqs))
 
 if sys.version_info[0] == 2:

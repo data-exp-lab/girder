@@ -17,7 +17,6 @@
 #  limitations under the License.
 ###############################################################################
 
-import json
 import os
 import re
 import shutil
@@ -62,7 +61,7 @@ with open('README.rst') as f:
 install_reqs = [
     'bcrypt',
     'boto',
-    'CherryPy',
+    'CherryPy<8',  # see https://github.com/girder/girder/issues/1615
     'Mako',
     'pymongo>=3',
     'PyYAML',
@@ -99,6 +98,8 @@ if sys.version_info[0] == 2:
             'hachoir-parser'
         ]
     })
+
+extras_reqs['sftp'] = ['paramiko']
 
 init = os.path.join(os.path.dirname(__file__), 'girder', '__init__.py')
 with open(init) as fd:
@@ -149,7 +150,8 @@ setup(
     entry_points={
         'console_scripts': [
             'girder-server = girder.__main__:main',
-            'girder-install = girder.utility.install:main'
+            'girder-install = girder.utility.install:main',
+            'girder-sftpd = girder.api.sftp:_main'
         ]
     }
 )

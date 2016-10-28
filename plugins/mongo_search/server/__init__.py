@@ -93,10 +93,27 @@ class ResourceExt(Resource):
             return list(model.find(query, fields=allowed[coll], limit=limit,
                                    offset=offset))
 
+    @access.admin
+    @describeRoute(
+        Description('Get list of searchable fields per collection type.')
+        .param('default', 'Whether to return the default list of searchable fields.',
+               required=False, dataType='boolean', default=False)
+    )
+    def getAllowedFields(self, params):
+        """
+        Get list of searchable fields per collection type.
+        """
+        if self.boolParam('default', params, default=False):
+            return SettingDefault.defaults[PluginSettings.ALLOWED_FIELDS]
+        else:
+            return self.model('setting').get(PluginSettings.ALLOWED_FIELDS)
+
 
 def load(info):
     ext = ResourceExt()
     info['apiRoot'].resource.route('GET', ('mongo_search',), ext.mongoSearch)
+    info['apiRoot'].resource.route('GET', ('mongo_search', 'allowed'),
+                                   ext.getAllowedFields)
 
     # Add default allowed fields settings
     SettingDefault.defaults[PluginSettings.ALLOWED_FIELDS] = \

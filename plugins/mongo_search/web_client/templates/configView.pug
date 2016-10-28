@@ -1,0 +1,11 @@
+.g-config-breadcrumb-container
+p.g-mongo-search-description
+  | Configure the searchable fields for MongoDB queries.
+form#g-mongo-search-settings-form(role="form")
+  .form-group
+    label.control-label(for="g-mongo-search") Allowed Fields
+    textarea#g-mongo-search.form-control= allowed
+  p#g-mongo-search-error-message.g-validation-failed-message
+  input.btn.btn-sm.btn-primary(type="submit", value="Save")
+  input#g-mongo-search-defaults.btn.btn-sm.btn-default(
+    type="button", value="Reset to defaults")

@@ -20,11 +20,37 @@
 import bson.json_util
 
 from girder import events
-from girder.constants import AccessType
-from girder.utility.model_importer import ModelImporter
+from girder.api import access
 from girder.api.describe import Description, describeRoute
 from girder.api.rest import Resource, RestException
-from girder.api import access
+from girder.constants import AccessType, SettingDefault
+from girder.models.model_base import ValidationException
+from girder.utility import setting_utilities
+from girder.utility.model_importer import ModelImporter
+
+from .constants import PluginSettings, PluginSettingsDefaults
+
+
+@setting_utilities.validator(PluginSettings.ALLOWED_FIELDS)
+def validateAllowedFields(doc):
+    val = doc['value']
+    if not isinstance(val, dict):
+        raise ValidationException('Allowed fields settings must be a dict.', 'value')
+
+    # TODO: should be configurable too
+    colls = set(['user', 'collection', 'folder', 'item'])
+
+    if not all(_ in colls for _ in doc['value']):
+        raise ValidationException('Only {} are valid keywords'.format(str(colls)),
+                                  'value')
+    if not all(isinstance(_, list) for _ in doc['value'].values()):
+        raise ValidationException('Allowed fields values must be lists.', 'value')
+
+    for coll in colls:
+        model = ModelImporter().model(coll)
+        keys = set(model._filterKeys[AccessType.READ])  # TODO: should it be SITE_ADMIN?
+        if not all(_ in keys for _ in doc['value'][coll]):
+            raise ValidationException('Invalid key for "{}"'.format(coll), 'value')
 
 
 class ResourceExt(Resource):
@@ -42,12 +68,7 @@ class ResourceExt(Resource):
     )
     def mongoSearch(self, params):
         self.requireParams(('type', 'q'), params)
-        allowed = {
-            'collection': ['_id', 'name', 'description'],
-            'folder': ['_id', 'name', 'description'],
-            'item': ['_id', 'name', 'description', 'folderId'],
-            'user': ['_id', 'firstName', 'lastName', 'login']
-        }
+        allowed = ModelImporter.model('setting').get(PluginSettings.ALLOWED_FIELDS)
         limit, offset, sort = self.getPagingParameters(params, 'name')
         coll = params['type']
 
@@ -76,3 +97,7 @@ class ResourceExt(Resource):
 def load(info):
     ext = ResourceExt()
     info['apiRoot'].resource.route('GET', ('mongo_search',), ext.mongoSearch)
+
+    # Add default allowed fields settings
+    SettingDefault.defaults[PluginSettings.ALLOWED_FIELDS] = \
+        PluginSettingsDefaults.defaults[PluginSettings.ALLOWED_FIELDS]

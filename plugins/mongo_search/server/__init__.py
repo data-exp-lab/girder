@@ -95,13 +95,15 @@ class ResourceExt(Resource):
 
     @access.admin
     @describeRoute(
-        Description('Get list of searchable fields per collection type.')
-        .param('default', 'Whether to return the default list of searchable fields.',
+        Description('Get a list of fields per a collection type that is going to be'
+                    ' returned by a MongoDB query.')
+        .param('default', 'Whether to return the default list of returned fields.',
                required=False, dataType='boolean', default=False)
     )
     def getAllowedFields(self, params):
         """
-        Get list of searchable fields per collection type.
+        Get a list of fields per a collection type that is going to model_base
+        returned by a MongoDB query.
         """
         if self.boolParam('default', params, default=False):
             return SettingDefault.defaults[PluginSettings.ALLOWED_FIELDS]

@@ -115,7 +115,7 @@ route for ``GET /item/:id/cat`` to the system,
     from girder.api.rest import boundHandler
 
     @access.public
-    @boundHandler()
+    @boundHandler
     def myHandler(self, id, params):
         self.requireParams('cat', params)
 
@@ -159,7 +159,7 @@ example:
         .param('id', 'The item ID', paramType='path')
         .param('cat', 'The cat value.', required=False)
         .errorResponse())
-    def myHandler(id, cat, params):
+    def myHandler(id, cat):
         return {
            'itemId': id,
            'cat': cat
@@ -173,10 +173,10 @@ and type coercion for you, with the benefit of ensuring that the documentation o
 the endpoint inputs matches their actual behavior. Documented parameters will be
 sent to the method as kwargs (so the order you declare them in the header doesn't matter).
 Any additional parameters that were passed but not listed in the ``Description`` object
-will be contained in the ``params`` kwarg as a dictionary. The validation of required
-parameters, coercion to the correct data type, and setting default values is all
-handled automatically for you based on the parameter descriptions in the ``Description``
-object passed. Two special methods of the ``Description`` object can be used for
+will be contained in the ``params`` kwarg as a dictionary, if that parameter is present. The
+validation of required parameters, coercion to the correct data type, and setting default
+values is all handled automatically for you based on the parameter descriptions in the
+``Description`` object passed. Two special methods of the ``Description`` object can be used for
 additional behavior control: :py:func:`girder.api.describe.Description.modelParam` and
 :py:func:`girder.api.describe.Description.jsonParam`.
 
@@ -976,7 +976,7 @@ However, plugin developers can also choose to extend or even entirely override t
 To do this, you only need to provide a path to a custom ESLint configuration file, using the
 ``ESLINT_CONFIG_FILE`` option to ``add_eslint_test``. Of course, since ``add_standard_plugin_tests``
 should be prevented from adding these tests, static analysis should also be manually added to PugJS
-template files with ``add_puglint_test``. For example:
+template files with ``add_puglint_test`` and ``add_stylint_test``. For example:
 
 .. code-block:: cmake
 
@@ -984,6 +984,7 @@ template files with ``add_puglint_test``. For example:
     add_eslint_test(js_static_analysis_cats "${PROJECT_SOURCE_DIR}/plugins/cats/web_client"
         ESLINT_CONFIG_FILE "${PROJECT_SOURCE_DIR}/plugins/cats/.eslintrc.json")
     add_puglint_test(cats "${PROJECT_SOURCE_DIR}/plugins/cats/web_client/templates")
+    add_stylint_test(cats "${PROJECT_SOURCE_DIR}/plugins/cats/web_client/stylesheets")
 
 You can `configure ESLint <http://eslint.org/docs/user-guide/configuring.html>`_ inside your
 ``.eslintrc.json`` file however you choose.  For example, to extend Girder's own configuration to

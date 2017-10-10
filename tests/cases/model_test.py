@@ -64,6 +64,128 @@ class ModelTestCase(base.TestCase):
         ModelImporter.registerModel('fake_ac', FakeAcModel())
         ModelImporter.registerModel('fake', FakeModel())
 
+    def testProjectionUtils(self):
+        def assertItemsEqual(a, b):
+            self.assertEqual(len(a), len(b))
+            self.assertEqual(sorted(a), sorted(b))
+
+        inclusionProjDict = {
+            'public': True,
+            'access': True,
+            'email': True,
+            'login': True
+        }
+        inclusionProjList = ['public', 'access', 'email', 'login']
+        exclusionProjDict = {
+            'public': False,
+            'access': False,
+            'email': False,
+            'login': False
+        }
+        overrideFields = {'access', 'public'}
+
+        copy = dict(inclusionProjDict)
+        retval = Model._supplementFields(inclusionProjDict, overrideFields)
+        assertItemsEqual(retval, inclusionProjDict)
+        assertItemsEqual(inclusionProjDict, copy)
+        retval = Model._supplementFields(inclusionProjList, overrideFields)
+        assertItemsEqual(retval, inclusionProjList)
+        retval = Model._supplementFields(exclusionProjDict, {'newValue'})
+        assertItemsEqual(retval, exclusionProjDict)
+        retval = Model._supplementFields(inclusionProjDict, {'newValue'})
+        assertItemsEqual(retval, {
+            'public': True,
+            'access': True,
+            'email': True,
+            'login': True,
+            'newValue': True
+        })
+        retval = Model._supplementFields(exclusionProjDict, overrideFields)
+        assertItemsEqual(retval, {'email': False, 'login': False})
+
+        originalDoc = {
+            '_id': '1234',
+            'public': True,
+            'access': True,
+            'email': 'email@email.com',
+            'login': 'login',
+            'password': 'password1',
+            'admin': False,
+            'firstName': 'first',
+            'lastName': 'last'
+        }
+        doc = dict(originalDoc)
+        Model._removeSupplementalFields(doc, exclusionProjDict)
+        assertItemsEqual(doc, {
+            '_id': '1234',
+            'password': 'password1',
+            'admin': False,
+            'firstName': 'first',
+            'lastName': 'last'})
+
+        doc = dict(originalDoc)
+        Model._removeSupplementalFields(doc, inclusionProjList)
+        assertItemsEqual(doc, {
+            '_id': '1234',
+            'public': True,
+            'access': True,
+            'email': 'email@email.com',
+            'login': 'login'})
+
+        doc = dict(originalDoc)
+        Model._removeSupplementalFields(doc, inclusionProjDict)
+        assertItemsEqual(doc, {
+            '_id': '1234',
+            'public': True,
+            'access': True,
+            'email': 'email@email.com',
+            'login': 'login'})
+
+        # Test None edge cases
+        retval = Model._supplementFields(None, {'access', 'public'})
+        self.assertIsNone(retval)
+        doc = dict(originalDoc)
+        Model._removeSupplementalFields(doc, None)
+        assertItemsEqual(doc, originalDoc)
+
+        # Test '_id': False inclusion edge case
+        fields = {
+            '_id': False,
+            'login': True,
+            'email': True,
+            'firstName': True,
+            'lastName': True
+        }
+        overwrittenFields = {
+            '_id': True,
+            'login': True,
+            'email': True,
+            'firstName': True,
+            'lastName': True
+        }
+        overwrite = {'_id', 'login'}
+        retval = Model._supplementFields(fields, overwrite)
+        assertItemsEqual(retval, overwrittenFields)
+        doc = {
+            '_id': 'id',
+            'login': 'login',
+            'email': 'email@email.com',
+            'firstName': 'fname',
+            'lastName': 'lname'
+        }
+        Model._removeSupplementalFields(doc, fields)
+        assertItemsEqual(doc, {
+            'login': 'login',
+            'email': 'email@email.com',
+            'firstName': 'fname',
+            'lastName': 'lname'})
+
+        # Test _isInclusionProjection edge cases
+        self.assertEqual(Model._isInclusionProjection(None), False)
+        self.assertEqual(Model._isInclusionProjection({}), True)
+        self.assertEqual(Model._isInclusionProjection({'_id': False}), False)
+        self.assertEqual(Model._isInclusionProjection({'_id': True}), True)
+
     def testModelFiltering(self):
         users = ({
             'email': 'good@email.com',

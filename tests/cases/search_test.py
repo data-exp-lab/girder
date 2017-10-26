@@ -16,13 +16,18 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 ###############################################################################
+import json
 
 from .. import base
 
-from girder.api.v1 import resource
 from girder.constants import AccessType
 from girder.models.model_base import AccessControlledModel
+from girder.models.assetstore import Assetstore
+from girder.models.collection import Collection
+from girder.models.item import Item
+from girder.models.user import User
 from girder.utility.acl_mixin import AccessControlMixin
+from girder.utility import search_mode_utilities
 
 
 def setUpModule():
@@ -40,15 +45,14 @@ class SearchTestCase(base.TestCase):
         Test resource/search endpoint
         """
         # get expected models from the database
-        admin = self.model('user').findOne({'login': 'adminlogin'})
-        user = self.model('user').findOne({'login': 'goodlogin'})
-        coll1 = self.model('collection').findOne({'name': 'Test Collection'})
-        coll2 = self.model('collection').findOne({'name': 'Magic collection'})
-        item1 = self.model('item').findOne({'name': 'Public object'})
+        admin = User().findOne({'login': 'adminlogin'})
+        user = User().findOne({'login': 'goodlogin'})
+        coll1 = Collection().findOne({'name': 'Test Collection'})
+        coll2 = Collection().findOne({'name': 'Magic collection'})
+        item1 = Item().findOne({'name': 'Public object'})
 
         # set user read permissions on the private collection
-        self.model('collection').setUserAccess(
-            coll2, user, level=AccessType.READ, save=True)
+        Collection().setUserAccess(coll2, user, level=AccessType.READ, save=True)
 
         # Grab the default user folders
         resp = self.request(
@@ -61,8 +65,7 @@ class SearchTestCase(base.TestCase):
         privateFolder = resp.json[0]
 
         # First test all of the required parameters.
-        self.ensureRequiredParams(
-            path='/resource/search', required=['q', 'types'])
+        self.ensureRequiredParams(path='/resource/search', required=['q', 'types'])
 
         # Now test parameter validation
         resp = self.request(path='/resource/search', params={
@@ -179,14 +182,42 @@ class SearchTestCase(base.TestCase):
         }, resp.json['item'][0])
 
         # Check search for model that is not access controlled
-        self.assertNotIsInstance(
-            self.model('assetstore'), AccessControlledModel)
-        self.assertNotIsInstance(
-            self.model('assetstore'), AccessControlMixin)
-        resource.allowedSearchTypes.add('assetstore')
+        self.assertNotIsInstance(Assetstore(), AccessControlledModel)
+        self.assertNotIsInstance(Assetstore(), AccessControlMixin)
         resp = self.request(path='/resource/search', params={
             'q': 'Test',
             'mode': 'prefix',
             'types': '["assetstore"]'
         }, user=user)
         self.assertEqual(1, len(resp.json['assetstore']))
+
+    def testSearchModeRegistry(self):
+        def testSearchHandler(query, types, user, level, limit, offset):
+            return {
+                'query': query,
+                'types': types
+            }
+
+        search_mode_utilities.addSearchMode('testSearch', testSearchHandler)
+
+        # Use the new search mode.
+        resp = self.request(path='/resource/search', params={
+            'q': 'Test',
+            'mode': 'testSearch',
+            'types': json.dumps(["collection"])
+        })
+        self.assertStatusOk(resp)
+        self.assertDictEqual(resp.json, {
+            'query': 'Test',
+            'types': ["collection"]
+        })
+
+        search_mode_utilities.removeSearchMode('testSearch')
+
+        # Use the deleted search mode.
+        resp = self.request(path='/resource/search', params={
+            'q': 'Test',
+            'mode': 'testSearch',
+            'types': json.dumps(["collection"])
+        })
+        self.assertStatus(resp, 400)

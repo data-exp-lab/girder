@@ -8,6 +8,7 @@ RUN mkdir /girder/logs
 
 RUN apt-get update && apt-get install -qy \
     gcc \
+    vim \
     libpython3-dev \
     git \
     libldap2-dev \
@@ -28,7 +29,10 @@ COPY package.json /girder/package.json
 COPY README.rst /girder/README.rst
 
 RUN pip install --upgrade --upgrade-strategy eager --editable .[plugins]
+RUN girder-install plugin plugins/ythub
 RUN girder-install web --all-plugins
+
+COPY ./girder.ythub.cfg /girder/girder/conf/girder.local.cfg
 
 # See http://click.pocoo.org/5/python3/#python-3-surrogate-handling for more detail on
 # why this is necessary.

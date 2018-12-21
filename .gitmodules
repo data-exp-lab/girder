@@ -1,0 +1,3 @@
+[submodule "plugins/ythub"]
+	path = plugins/ythub
+	url = http://github.com/data-exp-lab/girder_ythub

@@ -32,7 +32,7 @@ from .. import base, mock_s3
 from girder import events
 from girder.constants import SettingKey
 from girder.models import getDbConnection
-from girder.exceptions import AccessException, GirderException
+from girder.exceptions import AccessException, GirderException, FilePathException
 from girder.models.assetstore import Assetstore
 from girder.models.collection import Collection
 from girder.models.file import File
@@ -43,6 +43,14 @@ from girder.utility import gridfs_assetstore_adapter
 from girder.utility.filesystem_assetstore_adapter import DEFAULT_PERMS
 from girder.utility.s3_assetstore_adapter import makeBotoConnectParams, S3AssetstoreAdapter
 from six.moves import urllib
+
+# The latest moto/boto/botocore requires dummy credentials to function.  It is unclear if
+# this is a bug or intended behavior.
+#  https://github.com/spulec/moto/issues/1793#issuecomment-431459262
+#  https://github.com/spulec/moto/issues/1924
+os.environ['AWS_ACCESS_KEY_ID'] = "access"
+os.environ['AWS_SECRET_ACCESS_KEY'] = "secret"
+os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 
 
 def setUpModule():
@@ -690,6 +698,10 @@ class FileTestCase(base.TestCase):
         self.assertEqual(os.stat(abspath).st_size, file['size'])
         self.assertEqual(os.stat(abspath).st_mode & 0o777, DEFAULT_PERMS)
 
+        # Make sure the file reports the same path as we have
+        self.assertEqual(File().getAssetstoreAdapter(file).fullPath(file), abspath)
+        self.assertEqual(File().getLocalFilePath(file), abspath)
+
         # Make sure access control is enforced on download
         resp = self.request(
             path='/file/%s/download' % file['_id'], method='GET')
@@ -835,6 +847,9 @@ class FileTestCase(base.TestCase):
         hash = sha512(chunkData).hexdigest()
         file = File().load(file['_id'], force=True)
         self.assertEqual(hash, file['sha512'])
+
+        # The file should have no local path
+        self.assertRaises(FilePathException, File().getLocalFilePath, file)
 
         # We should have two chunks in the database
         self.assertEqual(chunkColl.find({'uuid': file['chunkUuid']}).count(), 2)
@@ -1087,10 +1102,14 @@ class FileTestCase(base.TestCase):
         extracted = zip.read('Private/My Link Item').decode('utf8')
         self.assertEqual(extracted, params['linkUrl'].strip())
 
+        # The file should report no assetstore adapter
+        fileDoc = File().load(file['_id'], force=True)
+        self.assertIsNone(File().getAssetstoreAdapter(fileDoc))
+
     def tearDown(self):
         if self.testForFinalizeUpload:
             self.assertTrue(self.finalizeUploadBeforeCalled)
             self.assertTrue(self.finalizeUploadAfterCalled)
 
-            events.unbind('model.file.finalizeUpload.before', '_testFinalizeUploadBefore')
-            events.unbind('model.file.finalizeUpload.after', '_testFinalizeUploadAfter')
+        events.unbind('model.file.finalizeUpload.before', '_testFinalizeUploadBefore')
+        events.unbind('model.file.finalizeUpload.after', '_testFinalizeUploadAfter')

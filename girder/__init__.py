@@ -28,8 +28,9 @@ import traceback
 
 from girder.constants import LOG_ROOT, MAX_LOG_SIZE, LOG_BACKUP_COUNT, TerminalColor, VERSION
 from girder.utility import config, mkdir
+from girder.utility._cache import cache, requestCache, rateLimitBuffer
 
-__version__ = '2.4.0'
+__version__ = '2.5.0'
 __license__ = 'Apache 2.0'
 
 
@@ -77,7 +78,7 @@ class LogFormatter(logging.Formatter):
         return super(LogFormatter, self).format(record, *args, **kwargs)
 
 
-class StreamToLogger:
+class StreamToLogger(object):
     """
     Redirect a file-like stream to a logger.
     """
@@ -103,7 +104,10 @@ class StreamToLogger:
             # It's possible for a file-like object to have name appear in dir(stream) but not
             # actually be an attribute, thus using a default with getattr is required.
             # See https://github.com/GrahamDumpleton/mod_wsgi/issues/184 for more.
-            if key != 'write' and not key.startswith('_') and callable(getattr(stream, key, None)):
+            if (key != 'write' and not key.startswith('_') and (
+                    callable(getattr(stream, key, None)) or
+                    isinstance(getattr(stream, key, None), (
+                        six.binary_type, six.string_types, six.integer_types, bool)))):
                 setattr(self, key, getattr(stream, key))
 
     def write(self, buf):
@@ -221,10 +225,12 @@ def _setupLogger():
 
 
 logger = _setupLogger()
+auditLogger = logging.getLogger('girder_audit')
+auditLogger.setLevel(logging.INFO)
 
 
-def logStdoutStderr():
-    if _originalStdOut == sys.stdout:
+def logStdoutStderr(force=False):
+    if _originalStdOut == sys.stdout or force:
         sys.stdout = StreamToLogger(_originalStdOut, logger, logging.INFO)
         sys.stderr = StreamToLogger(_originalStdErr, logger, logging.ERROR)
 
@@ -257,6 +263,37 @@ def logprint(*args, **kwargs):
             data = getattr(TerminalColor, color)(data)
         _originalStdOut.write('%s\n' % data)
         _originalStdOut.flush()
+
+
+def _setupCache():
+    """
+    Setup caching based on configuration file.
+
+    Cache backends are forcibly replaced because Girder initially configures
+    the regions with the null backends.
+    """
+    curConfig = config.getConfig()
+
+    if curConfig['cache']['enabled']:
+        # Replace existing backend, this is necessary
+        # because they're initially configured with the null backend
+        cacheConfig = {
+            'cache.global.replace_existing_backend': True,
+            'cache.request.replace_existing_backend': True
+        }
+
+        curConfig['cache'].update(cacheConfig)
+
+        cache.configure_from_config(curConfig['cache'], 'cache.global.')
+        requestCache.configure_from_config(curConfig['cache'], 'cache.request.')
+    else:
+        # Reset caches back to null cache (in the case of server teardown)
+        cache.configure(backend='dogpile.cache.null', replace_existing_backend=True)
+        requestCache.configure(backend='dogpile.cache.null', replace_existing_backend=True)
+
+    # Although the rateLimitBuffer has no pre-existing backend, this method may be called multiple
+    # times in testing (where caches were already configured)
+    rateLimitBuffer.configure(backend='dogpile.cache.memory', replace_existing_backend=True)
 
 
 # Expose common logging levels and colors as methods of logprint.

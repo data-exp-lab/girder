@@ -1,12 +1,16 @@
+# This file is parsed by "setup.py" to generate plugin requirements, so care should be taken when
+# editing it.
 /*
 !.gitignore
-!authorized_upload
-!autojoin
+!audit_logs/
+!authorized_upload/
+!autojoin/
 !candela/
 !celery_jobs/
 !curation/
 !dicom_viewer/
 !download_statistics/
+!fuse/
 !geospatial/
 !google_analytics/
 !gravatar/
@@ -29,4 +33,5 @@
 !treeview/
 !user_quota/
 !vega/
+!virtual_folders/
 !worker/

@@ -19,7 +19,7 @@ import View from 'girder/views/View';
 import { AccessType } from 'girder/constants';
 import { confirm, handleClose } from 'girder/dialog';
 import events from 'girder/events';
-import { getModelClassByName, renderMarkdown, formatCount, capitalize } from 'girder/misc';
+import { getModelClassByName, renderMarkdown, formatCount, capitalize, formatSize } from 'girder/misc';
 import { restRequest, getApiRoot } from 'girder/rest';
 
 import HierarchyBreadcrumbTemplate from 'girder/templates/widgets/hierarchyBreadcrumb.pug';
@@ -174,11 +174,11 @@ var HierarchyWidget = View.extend({
                 this.uploadWidget.folder = folder;
             }
         }, this).off('g:checkboxesChanged')
-                .on('g:checkboxesChanged', this.updateChecked, this)
-                .off('g:changed').on('g:changed', function () {
-                    this.folderCount = this.folderListView.collection.length;
-                    this._childCountCheck();
-                }, this);
+            .on('g:checkboxesChanged', this.updateChecked, this)
+            .off('g:changed').on('g:changed', function () {
+                this.folderCount = this.folderListView.collection.length;
+                this._childCountCheck();
+            }, this);
 
         if (this.parentModel.resourceName === 'folder') {
             this._fetchToRoot(this.parentModel);
@@ -421,7 +421,7 @@ var HierarchyWidget = View.extend({
                   this.parentModel.escape('name') + '</b>?',
             escapedHtml: true,
             yesText: 'Delete',
-            confirmCallback: _.bind(function () {
+            confirmCallback: () => {
                 this.parentModel.on('g:deleted', function () {
                     if (type === 'collection') {
                         router.navigate('collections', {trigger: true});
@@ -433,8 +433,19 @@ var HierarchyWidget = View.extend({
                     throwError: true,
                     progress: true
                 });
-            }, this)
+            }
         };
+        if (type === 'collection' &&
+           (this.parentModel.get('nFolders') !== 0 || this.parentModel.get('size') !== 0)) {
+            params = _.extend({
+                name: this.parentModel.escape('name'),
+                additionalText: '<b>' + this.parentModel.escape('name') + '</b>' +
+                                ' contains <b>' + this.parentModel.escape('nFolders') +
+                                ' folders</b> taking up <b>' +
+                                formatSize(parseInt(this.parentModel.get('size'), 10)) + '</b>',
+                msgConfirmation: true
+            }, params);
+        }
         confirm(params);
     },
 
@@ -463,7 +474,7 @@ var HierarchyWidget = View.extend({
     fetchAndShowChildCount: function () {
         this.$('.g-child-count-container').addClass('hide');
 
-        var showCounts = _.bind(function () {
+        var showCounts = () => {
             const folderCount = formatCount(this.parentModel.get('nFolders'));
             this.$('.g-child-count-container').removeClass('hide');
             this.$('.g-subfolder-count').text(folderCount);
@@ -475,7 +486,7 @@ var HierarchyWidget = View.extend({
                 const itemTooltip = itemCount === 1 ? `${itemCount} total item` : `${itemCount} total items`;
                 this.$('.g-item-count-container').attr('title', itemTooltip);
             }
-        }, this);
+        };
 
         if (this.parentModel.has('nFolders')) {
             showCounts();
@@ -487,9 +498,9 @@ var HierarchyWidget = View.extend({
         }
 
         this.parentModel.off('change:nItems', showCounts, this)
-                        .on('change:nItems', showCounts, this)
-                        .off('change:nFolders', showCounts, this)
-                        .on('change:nFolders', showCounts, this);
+            .on('change:nItems', showCounts, this)
+            .off('change:nFolders', showCounts, this)
+            .on('change:nFolders', showCounts, this);
 
         return this;
     },
@@ -846,10 +857,10 @@ var HierarchyWidget = View.extend({
                 parentId: this.parentModel.get('_id'),
                 progress: true
             }
-        }).done(_.bind(function () {
+        }).done(() => {
             this._incrementCounts(nFolders, nItems);
             this.setCurrentModel(this.parentModel, {setRoute: false});
-        }, this));
+        });
         this.clearPickedResources();
     },
 
@@ -869,10 +880,10 @@ var HierarchyWidget = View.extend({
                 parentId: this.parentModel.get('_id'),
                 progress: true
             }
-        }).done(_.bind(function () {
+        }).done(() => {
             this._incrementCounts(nFolders, nItems);
             this.setCurrentModel(this.parentModel, {setRoute: false});
-        }, this));
+        });
         this.clearPickedResources();
     },
 
@@ -895,7 +906,7 @@ var HierarchyWidget = View.extend({
             form.append($('<input/>').attr({type: 'text', name: key, value: value}));
         });
         // $(form).submit() will *not* work w/ Firefox (http://stackoverflow.com/q/7117084/250457)
-        $(form).appendTo('body').submit();
+        $(form).appendTo('body').submit().remove();
     },
 
     editAccess: function () {

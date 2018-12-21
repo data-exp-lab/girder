@@ -21,9 +21,8 @@ This module contains functions to install optional components
 into the current Girder installation.  Note that Girder must
 be restarted for these changes to take effect.
 """
-
+import collections
 import os
-import pip
 import re
 import select
 import shutil
@@ -32,6 +31,7 @@ import subprocess
 import string
 import sys
 
+import girder
 from girder import constants
 from girder.models.setting import Setting
 from girder.utility import plugin_utilities
@@ -40,8 +40,18 @@ version = constants.VERSION['apiVersion']
 webRoot = os.path.join(constants.STATIC_ROOT_DIR, 'clients', 'web')
 
 # monkey patch shutil for python < 3
-if sys.version_info[0] == 2:
+if not six.PY3:
     import shutilwhich  # noqa
+
+
+def _pipMain(*args):
+    """Run `pip *args` in a system independent way.
+
+    This replaces the old method of calling `pip.main` directly which
+    was broken by pip 9.0.2.
+    """
+    pipCommand = (sys.executable, '-m', 'pip') + args
+    subprocess.check_call(pipCommand)
 
 
 def print_version(parser):
@@ -108,7 +118,7 @@ def _pipeOutputToProgress(proc, progress):
                 if buf:
                     buf = buf.decode('utf8', errors='ignore')
                     # Remove ANSI escape sequences
-                    buf = re.sub('(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]', '', buf)
+                    buf = re.sub(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]', '', buf)
                     # Filter out non-printable characters
                     msg = ''.join(c for c in buf if c in string.printable)
                     if msg:
@@ -120,6 +130,41 @@ def _pipeOutputToProgress(proc, progress):
             break
         elif not fds and proc.poll() is None:
             proc.wait()
+
+
+def _getGitVersions():
+    """
+    Use git to query the versions of the core deployment and all plugins.
+
+    :returns: a dictionary with 'core' and each plugin, each with git
+        version information if it can be found.
+    """
+    gitCommands = collections.OrderedDict([
+        ('SHA', ['rev-parse', 'HEAD']),
+        ('shortSHA', ['rev-parse', '--short', 'HEAD']),
+        ('lastCommitTime', ['log', '--format="%ai"', '-n1', 'HEAD']),
+        ('branch', ['rev-parse', '--abbrev-ref', 'HEAD']),
+    ])
+    versions = {}
+    paths = collections.OrderedDict()
+    if hasattr(girder, '__file__'):
+        paths['core'] = fix_path(os.path.dirname(os.path.dirname(girder.__file__)))
+    for plugin in plugin_utilities.findAllPlugins():
+        paths[plugin] = fix_path(os.path.join(plugin_utilities.getPluginDir(), plugin))
+    for key in paths:
+        if os.path.exists(paths[key]):
+            for info, cmd in six.iteritems(gitCommands):
+                value = subprocess.Popen(
+                    ['git'] + cmd,
+                    shell=False,
+                    stdout=subprocess.PIPE,
+                    cwd=paths[key]).stdout.read()
+                value = value.strip().decode('utf8', 'ignore').strip('"')
+                if (info == 'SHA' and key != 'core' and
+                        value == versions.get('core', {}).get('SHA', '')):
+                    break
+                versions.setdefault(key, {})[info] = value
+    return versions
 
 
 def runWebBuild(wd=None, dev=False, npm='npm', allPlugins=False, plugins=None, progress=None,
@@ -222,20 +267,16 @@ def _install_plugin_reqs(pluginPath, name, dev=False):
     # Install plugin dependencies
     if os.path.isfile(setupPath):
         print(constants.TerminalColor.info('Installing %s as a package.' % name))
-        if pip.main(['install', '-e', pluginPath]) != 0:
-            raise Exception('Failed to install package at %s.' % pluginPath)
+        _pipMain('install', '-e', pluginPath)
     elif os.path.isfile(requirementsPath):
         print(constants.TerminalColor.info('Installing requirements.txt for %s.' % name))
-        if pip.main(['install', '-r', requirementsPath]) != 0:
-            raise Exception('Failed to install requirements file at %s.' % requirementsPath)
+        _pipMain('install', '-r', requirementsPath)
 
     # Install plugin development dependencies
     if dev and os.path.isfile(devRequirementsPath):
         print(constants.TerminalColor.info(
             'Installing requirements-dev.txt for %s.' % name))
-        if pip.main(['install', '-r', devRequirementsPath]) != 0:
-            raise Exception(
-                'Failed to install requirements file at %s.' % devRequirementsPath)
+        _pipMain('install', '-r', devRequirementsPath)
 
 
 def install_plugin(opts):
@@ -374,8 +415,8 @@ def main():
     ).set_defaults(func=print_web_root)
 
     parsed = parser.parse_args()
-    parsed.func(parsed)
 
-
-if __name__ == '__main__':
-    main()  # pragma: no cover
+    if hasattr(parsed, 'func'):
+        parsed.func(parsed)
+    else:
+        parser.print_help()

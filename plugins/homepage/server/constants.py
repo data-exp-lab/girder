@@ -28,7 +28,7 @@ from girder.utility import setting_utilities
 COLLECTION_NAME = 'Homepage Assets'
 
 
-class PluginSettings:
+class PluginSettings(object):
     MARKDOWN = 'homepage.markdown'
 
     HEADER = 'homepage.header'
@@ -82,7 +82,7 @@ def _validateLogo(doc):
     except ValidationException as e:
         # Invalid ObjectId, or non-existent document
         raise ValidationException(e.message, 'value')
-    except AccessException as e:
+    except AccessException:
         raise ValidationException('Logo must be publicly readable', 'value')
 
     # Store this field natively as an ObjectId

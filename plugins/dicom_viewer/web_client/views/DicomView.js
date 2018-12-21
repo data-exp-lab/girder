@@ -48,6 +48,8 @@ const DicomFileCollection = FileCollection.extend({
         this._selectedIndex = null;
     },
 
+    sortField: 'none',
+
     selectIndex: function (index) {
         this._selectedIndex = index;
         this.trigger('g:selected', this.at(index), index);
@@ -166,6 +168,13 @@ const DicomSliceImageWidget = View.extend({
             camera: null,
             interactor: null
         };
+    },
+
+    destroy: function () {
+        if (this.vtk.interactor) {
+            this.vtk.interactor.unbindEvents(this.el);
+        }
+        View.prototype.destroy.apply(this, arguments);
     },
 
     /**
@@ -405,7 +414,7 @@ const DicomItemView = View.extend({
 
         selectedFile.getSlice()
             .done((slice) => {
-                this.$('.g-dicom-filename').text(selectedFile.name());
+                this.$('.g-dicom-filename').text(selectedFile.name()).attr('title', selectedFile.name());
                 this.$('.g-dicom-slider').val(selectedIndex);
 
                 this._sliceMetadataView
